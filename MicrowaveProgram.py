@@ -427,27 +427,26 @@ class MainWidget(QGroupBox):
 			self.drawplot.emit()
 			N = span/2 // stepsize + 1
 			self.freqs = np.arange(-N, N+1) * stepsize + center
-			
-			# Divide by two to take into account the doubler
-			self.freqs /= 2
-			fm_amplitude = values['measurement_modulationamplitude'] / 2
 
 			# Repetitions
-			if values['repetitions'] > 1:
+			if values['measurement_repetitions'] > 1:
 				tmp = []
-				for i in range(values['repetitions']):
+				for i in range(values['measurement_repetitions']):
 					if i % 2 == 0:
 						tmp.append(self.freqs)
 					else:
 						tmp.append(self.freqs[::-1])
 				self.freqs = np.concatenate(tmp)
+			
+			# Divide by two to take into account the doubler
+			fm_amplitude = values['measurement_modulationamplitude'] / 2
 
 			# Determin OSC Amplitude
 			if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
-				fm_factors = {7: 10000, 6: 3000, 5: 1000, 4: 300, 3: 100, 2: 30}			
-				for fm_factor_key, fm_factor in fm_factors.items():
-					if fm_factor > fm_amplitude:
-						break				
+				fm_factors = {7: 10000, 6: 3000, 5: 1000, 4: 300, 3: 100, 2: 30}
+				tmp = {key: value for key, value in fm_factors.items() if value >= fm_amplitude}
+				fm_factor_key = min(tmp, key=tmp.get)
+				fm_factor = fm_factors[fm_factor_key]		
 				osc_amp = fm_amplitude / fm_factor
 			else:
 				osc_amp = 0.5
@@ -458,20 +457,21 @@ class MainWidget(QGroupBox):
 
 			# Set up Lock-In Amplifier
 			startvalues = {
-				"IE": 		2,
+				"IE": 		0,
 				"REFN": 	2 if values['measurement_modulationtype'] != '1f-FM' else 1,
 				"VMODE": 	1,
 				"SLOPE": 	0,
 				"TC": 		tc_key,
-				"OF":		values['measurement_modulationfrequency'] * 1E6,
-				"OA":		osc_amp * 1E6 / np.sqrt(2),
-				"SEN": 		SEN_OPTIONS_INV[values['measurement_lockinsensitivity']],
-				"ACGAIN": 	16,
+				"OF.":		f'{values["measurement_modulationfrequency"]*1e3:.4f}',
+				"OA.":		f'{osc_amp / np.sqrt(2):.4f}',
+				# @Luis: lower sensitivity and gain required (gain should be at about 50db equals 5)
+				# "SEN": 		SEN_OPTIONS_INV[values['measurement_lockinsensitivity']],
+				# "ACGAIN": 	16,
 			}
 
 			for key, value in startvalues.items():
-				lockin.connection.write(f"{key} {value}")
-			lockin.connection.query("*OPC?")
+				lockin.write(f"{key} {value}")
+			lockin.query("*OPC?")
 
 			# Set up Synthesizer
 			synthesizer.write('R0') # RF off
@@ -487,7 +487,7 @@ class MainWidget(QGroupBox):
 				synthesizer.write('A2') # 30% AM
 
 			freq = self.freqs[0]
-			synthesizer.write(f'FR{freq*1E6}HZ')
+			synthesizer.write(f'FR{freq/2*1E6}HZ')
 			synthesizer.write('RA13DB') # Set to full power
 			synthesizer.write('R1') # RF on
 
@@ -505,15 +505,15 @@ class MainWidget(QGroupBox):
 					
 					time.sleep(0.1)
 				
-				synthesizer.write(f'FR{freq*1E6}HZ')
+				synthesizer.write(f'FR{freq/2*1E6}HZ')
 			
 				counterstart = time.perf_counter()
 				while time.perf_counter() - counterstart < delay_time:
 					continue
 
 				tmp = lockin.query("XY.?")
-				x, y = [float(x.split("\n")[0]) for x in tmp.split(",")]
-				self.xs[i], self.ys[i] = x, y
+				x, y = [float(x.split("\x00")[0]) for x in tmp.split(",")]
+				self.xs[i], self.ys[i] = x*1e6, y*1e6
 				self.newdata_available.emit()
 
 			freq = center/2
@@ -581,8 +581,7 @@ class MainWidget(QGroupBox):
 		if self.fit_curve is not None:
 			self.fit_curve.remove()
 			self.fit_curve = None
-		
-		
+			
 		tmp_xs = self.freqs
 		
 		component = config['plot_ycomponent']
@@ -593,7 +592,7 @@ class MainWidget(QGroupBox):
 		else:
 			tmp_ys = np.sqrt(np.power(self.xs, 2), np.power(self.ys, 2))
 
-		mask = (tmp_xs > xmin) & (tmp_xs < xmax)
+		mask = (tmp_xs > xmin) & (tmp_xs < xmax) & (~np.isnan(tmp_ys))
 		tmp_xs, tmp_ys = tmp_xs[mask], tmp_ys[mask]
 
 		fitmethod = config['fit_fitmethod']
