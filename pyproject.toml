@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "MTRACE"
+version = "0.1"
+authors = [
+  { name="Luis Bonah", email="bonah@ph1.uni-koeln.de" },
+]
+description = "MTRACE (Mini Tool for Remotely Accessing and Controlling Experiments) allows to control simple absorption experiments"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = ['numpy', 'pandas', 'matplotlib', 'scipy', 'PyQt6', 'pyvisa']
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+	"Operating System :: OS Independent",
+]
+keywords = ["Experiment", "Absorptions", "Spectroscopy"]
+
+[project.scripts]
+MTRACE = "MTRACE:start"
