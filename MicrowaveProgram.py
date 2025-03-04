@@ -207,7 +207,6 @@ class MainWindow(QMainWindow):
 		self.statusbar = StatusBar()
 		self.setStatusBar(self.statusbar)
 
-		self.notificationsbox = NotificationsBox()
 		ConfigWindow()
 		LogWindow()
 		
@@ -910,8 +909,8 @@ class Menu():
 				QQ(QAction, parent=parent, text='Next Frequency', change=lambda x: mainwindow.mainwidget.nextfrequency_counter.increase(), shortcut='Ctrl+N'),
 				None,
 				QQ(QAction, parent=parent, text='Autophase', change=lambda x: mainwindow.mainwidget.autophase_lockin()),
-				# None,
-				# QQ(QAction, parent=parent, text='Create testdata', change=lambda x: self.show_test_data()),
+				None,
+				QQ(QAction, parent=parent, text='Create testdata', change=lambda x: self.show_test_data()),
 			),
 			'View': (
 				toggleaction_config,
@@ -925,6 +924,9 @@ class Menu():
 				fitfunction_menu,
 				None,
 				QQ(QAction, parent=parent, text="Change Fit Color", tooltip="Change the color of the fitfunction", change=lambda _: self.change_fitcolor()),
+				None,
+				QQ(QAction, parent=parent, text="Show Fit Results", tooltip="Show the path to the file holding the results from fitting the lineshapes", change=lambda _: self.show_fit_file()),
+				
 			),
 		}
 
@@ -982,6 +984,9 @@ class Menu():
 		mainwindow.mainwidget.xs = ys
 		mainwindow.mainwidget.ys = ys
 		mainwindow.mainwidget.newdata_available.emit()
+	
+	def show_fit_file(self):
+		notify_info.emit(f'The file holding the results of the lineprofile fits is located under:<br>\'{llwpfile(".fit")}\'')
 
 class QSpinBox(QSpinBox):
 	def __init__(self, *args, **kwargs):
@@ -1314,72 +1319,6 @@ class Config(dict):
 			for callback in self._grouped_callbacks:
 				callback()
 			self._grouped_callbacks = set()
-
-class NotificationsBox(QWidget):
-	def __init__(self):
-		super().__init__()
-		self.bg_color = QColor("#a5aab3")
-		self.messages = []
-		self.setWindowFlags(
-			Qt.WindowType.Window | Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
-			Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.X11BypassWindowManagerHint)
-
-		self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-		self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-
-		self.setMinimumHeight(80)
-		self.setMinimumWidth(300)
-		self.setMaximumWidth(300)
-
-		self.layout = QVBoxLayout()
-		self.setLayout(self.layout)
-
-		self.setStyleSheet("""
-			color: white;
-			background-color: #bf29292a;
-		""")
-
-		self._desktop = QApplication.instance().primaryScreen()
-		startPos = QPoint(self._desktop.geometry().width() - self.width() - 10, 10)
-		self.move(startPos)
-
-	def paintEvent(self, event=None):
-		painter = QPainter(self)
-
-		painter.setOpacity(0.5)
-		painter.setPen(QPen(self.bg_color))
-		painter.setBrush(self.bg_color)
-		painter.drawRect(self.rect())
-
-	def add_message(self, text):
-		label = QLabel(text)
-		label.setWordWrap(True)
-		label.setStyleSheet("""
-			padding: 5px;
-		""")
-
-		self.layout.addWidget(label)
-		self.messages.append(label)
-		self.timer = QTimer(self)
-		self.timer.setSingleShot(True)
-		self.timer.timeout.connect(self.unshow_message)
-		self.timer.start(mw.config["flag_notificationtime"])
-
-		self.show()
-
-		self.timer2 = QTimer(self)
-		self.timer2.setSingleShot(True)
-		self.timer2.timeout.connect(self.adjustSize)
-		self.timer2.start(0)
-
-
-	def unshow_message(self):
-		label = self.messages.pop()
-		label.hide()
-		label.deleteLater()
-		if not self.messages:
-			self.hide()
-		self.adjustSize()
 
 class StatusBar(QStatusBar):
 	set_cursor_text = pyqtSignal(str)
