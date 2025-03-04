@@ -62,7 +62,11 @@ TC_OPTIONS = {0: '10μs', 1: '20μs', 2: '40μs', 3: '80μs', 4: '160μs', 5: '3
 TC_OPTIONS_INV = {value: key for key, value in TC_OPTIONS.items()}
 TC_TIMES = {0: 10e-6, 1: 20e-6, 2: 40e-6, 3: 80e-6, 4: 160e-6, 5: 320e-6, 6: 640e-6, 7: 5e-3, 8: 10e-3, 9: 20e-3, 10: 50e-3, 11: 100e-3, 12: 200e-3, 13: 500e-3, 14: 1, 15: 2, 16: 5, 17: 10, 18: 20, 19: 50, 20: 100, 21: 200, 22: 500, 23: 1e3, 24: 2e3, 25: 5e3, 26: 10e3, 27: 20e3, 28: 50e3, 29: 100e3}
 
-SEN_OPTIONS = {18: '1mV', 19: '2mV', 20: '5mV', 21: '10mV', 22: '20mV', 23: '50mV', 24: '100mV', 25: '200mV', 26: '500mV', 27: '1V'}
+SEN_OPTIONS = {
+	1: '2nV', 2: '5nV', 3: '10nV', 4: '20nV', 5: '50nV', 6: '100nV', 7: '200nV', 8: '500nv',
+	9: '1µV', 10: '2µV', 11: '5µV', 12: '10µV', 13: '20µV', 14: '50µV', 15: '100µV', 16: '200µV', 17: '500µV', 
+	18: '1mV', 19: '2mV', 20: '5mV', 21: '10mV', 22: '20mV', 23: '50mV', 24: '100mV', 25: '200mV', 26: '500mV', 27: '1V'
+}
 SEN_OPTIONS_INV = {value: key for key, value in SEN_OPTIONS.items()}
 
 ##
@@ -305,7 +309,7 @@ class MainWidget(QGroupBox):
 		tmp_layout.addWidget(QQ(QDoubleSpinBox, 'measurement_modulationamplitude', range=(0, np.inf)), i_row, 4)
 
 		i_row += 1
-		tmp_layout.addWidget(QQ(QLabel, text='Int. Time per Frequency: '), i_row, 3)
+		tmp_layout.addWidget(QQ(QLabel, text='Integration Time: '), i_row, 3)
 		tmp_layout.addWidget(QQ(QComboBox, 'measurement_timeconstant', options=TC_OPTIONS.values()), i_row, 4)
 
 
@@ -424,6 +428,7 @@ class MainWidget(QGroupBox):
 			center, span = values['measurement_center'], values['measurement_span']
 			stepsize = values['measurement_stepsize'] / 1000
 			self.ax.set_xlim(center - span/2, center + span/2)
+			self.remove_fitline()
 			self.drawplot.emit()
 			N = span/2 // stepsize + 1
 			self.freqs = np.arange(-N, N+1) * stepsize + center
@@ -464,9 +469,8 @@ class MainWidget(QGroupBox):
 				"TC": 		tc_key,
 				"OF.":		f'{values["measurement_modulationfrequency"]*1e3:.4f}',
 				"OA.":		f'{osc_amp / np.sqrt(2):.4f}',
-				# @Luis: lower sensitivity and gain required (gain should be at about 50db equals 5)
-				# "SEN": 		SEN_OPTIONS_INV[values['measurement_lockinsensitivity']],
-				# "ACGAIN": 	16,
+				"SEN": 		SEN_OPTIONS_INV[values['measurement_lockinsensitivity']],
+				"ACGAIN": 	values['measurement_acgain'],
 			}
 
 			for key, value in startvalues.items():
@@ -571,16 +575,17 @@ class MainWidget(QGroupBox):
 			text_cursor = f"  ({x=:{config['flag_xformatfloat']}}, {y=:{config['flag_xformatfloat']}})  "
 		mainwindow.statusbar.position_label.setText(text_cursor)
 
-	def on_range(self, xmin, xmax):
-		if xmax == xmin:
-			return
-		
+	def remove_fitline(self):
 		if self.fit_vline is not None:
 			self.fit_vline.remove()
 			self.fit_vline = None
 		if self.fit_curve is not None:
 			self.fit_curve.remove()
 			self.fit_curve = None
+	
+	def on_range(self, xmin, xmax):
+		if xmax == xmin:
+			return
 			
 		tmp_xs = self.freqs
 		
@@ -905,8 +910,8 @@ class Menu():
 				QQ(QAction, parent=parent, text='Next Frequency', change=lambda x: mainwindow.mainwidget.nextfrequency_counter.increase(), shortcut='Ctrl+N'),
 				None,
 				QQ(QAction, parent=parent, text='Autophase', change=lambda x: mainwindow.mainwidget.autophase_lockin()),
-				None,
-				QQ(QAction, parent=parent, text='Create testdata', change=lambda x: self.show_test_data()),
+				# None,
+				# QQ(QAction, parent=parent, text='Create testdata', change=lambda x: self.show_test_data()),
 			),
 			'View': (
 				toggleaction_config,
@@ -977,7 +982,6 @@ class Menu():
 		mainwindow.mainwidget.xs = ys
 		mainwindow.mainwidget.ys = ys
 		mainwindow.mainwidget.newdata_available.emit()
-	
 
 class QSpinBox(QSpinBox):
 	def __init__(self, *args, **kwargs):
@@ -1150,16 +1154,17 @@ class Config(dict):
 		'address_synthesizer': ('GPIB::19', str),
 		'address_lockin': ('GPIB::12', str),
 
-		'measurement_center': (23000, float),
-		'measurement_span': (5, float),
-		'measurement_stepsize': (200, float),
+		'measurement_center': (23870.1296, float),
+		'measurement_span': (10, float),
+		'measurement_stepsize': (50, float),
 		'measurement_repetitions': (1, int),
-		'measurement_timeconstant': ('10s', str),
+		'measurement_timeconstant': ('20ms', str),
 		'measurement_modulationtype': ('2f-FM', str),
 		'measurement_modulationfrequency': (10, float),
-		'measurement_modulationamplitude': (200, float),
-		'measurement_lockinsensitivity': ('100mV', str),
+		'measurement_modulationamplitude': (600, float),
+		'measurement_lockinsensitivity': ('20µV', str),
 		'measurement_additionaldelaytime': (5e-3, float),
+		'measurement_acgain': (4, float),
 		'measurement_notes': ('', str),
 
 		'plot_dpi': (100, int),
