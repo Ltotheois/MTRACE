@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "MTRACE"
+name = "mtrace"
 version = "0.1"
 authors = [
   { name="Luis Bonah", email="bonah@ph1.uni-koeln.de" },
@@ -20,4 +20,4 @@ classifiers = [
 keywords = ["Experiment", "Absorptions", "Spectroscopy"]
 
 [project.scripts]
-MTRACE = "MTRACE:start"
+mtrace = "mtrace:start"
