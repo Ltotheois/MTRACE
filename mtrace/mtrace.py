@@ -472,22 +472,23 @@ class MainWidget(QGroupBox):
 				"ACGAIN": 	values['measurement_acgain'],
 			}
 
-			for key, value in startvalues.items():
-				lockin.write(f"{key} {value}")
-			lockin.query("*OPC?")
+			if not values['measurement_skipinitialization']:
+				for key, value in startvalues.items():
+					lockin.write(f"{key} {value}")
+				lockin.query("*OPC?")
 
-			# Set up Synthesizer
-			synthesizer.write('R0') # RF off
-			synthesizer.write('A0') # AM off
-			synthesizer.write('D0') # FM off
-			synthesizer.write('P0') # PM off
-			synthesizer.write('W0') # Sweep off
+				# Set up Synthesizer
+				synthesizer.write('R0') # RF off
+				synthesizer.write('A0') # AM off
+				synthesizer.write('D0') # FM off
+				synthesizer.write('P0') # PM off
+				synthesizer.write('W0') # Sweep off
 
-			# Set this up conditionally, depending on the AM/FM mode
-			if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
-				synthesizer.write(f'D{fm_factor_key:1.0f}') # 0.03MHz FM
-			else:
-				synthesizer.write('A2') # 30% AM
+				# Set this up conditionally, depending on the AM/FM mode
+				if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
+					synthesizer.write(f'D{fm_factor_key:1.0f}') # 0.03MHz FM
+				else:
+					synthesizer.write('A2') # 30% AM
 
 			freq = self.freqs[0]
 			synthesizer.write(f'FR{freq/2*1E6}HZ')
@@ -1171,6 +1172,7 @@ class Config(dict):
 		'measurement_additionaldelaytime': (5e-3, float),
 		'measurement_acgain': (4, float),
 		'measurement_notes': ('', str),
+		'measurement_skipinitialization': (False, bool),
 
 		'plot_dpi': (100, int),
 		'plot_ymargin': (0.1, float),
