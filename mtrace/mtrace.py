@@ -462,7 +462,7 @@ class MainWidget(QGroupBox):
 			# Set up Lock-In Amplifier
 			startvalues = {
 				"IE": 		0,
-				"REFN": 	2 if values['measurement_modulationtype'] != '1f-FM' else 1,
+				"REFN": 	2 if values['measurement_modulationtype'] == '2f-FM' else 1,
 				"VMODE": 	1,
 				"SLOPE": 	0,
 				"TC": 		tc_key,
@@ -494,6 +494,8 @@ class MainWidget(QGroupBox):
 			synthesizer.write(f'FR{freq/2*1E6}HZ')
 			synthesizer.write('RA13DB') # Set to full power
 			synthesizer.write('R1') # RF on
+
+			time.sleep(0.5)
 
 			self.xs = np.full_like(self.freqs, np.nan)
 			self.ys = self.xs.copy()
