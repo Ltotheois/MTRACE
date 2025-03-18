@@ -412,6 +412,27 @@ class MainWidget(QGroupBox):
 		self.pause_button.setHidden(False)
 		self.save_button.setDisabled(False)
 
+		# Save file into MTRACE folder
+		homefolder = llwpfile()
+		directory = os.path.join(homefolder, "data", time.strftime("%Y%m%d", time.localtime())
+)
+		if not os.path.exists(directory):
+			os.makedirs(directory, exist_ok=True)
+		
+		fname = os.path.join(directory, time.strftime("%H-%M-%S", time.localtime()))
+		fs, xs, ys = self.freqs.copy(), self.xs.copy(), self.ys.copy()
+		df = pd.DataFrame({'Frequency': fs, 'X': xs, 'Y': ys})
+		data = df.groupby('Frequency').mean().reset_index().values
+
+		header = '\n'.join([
+			f'FM/AM Mode: {self.values["measurement_modulationtype"]}',
+			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
+			f'FM/AM Amplitude: {self.values["measurement_modulationamplitude"]}',
+			f'Timeconstant: {self.values["measurement_modulationamplitude"]}',
+			f'Notes: {self.values["measurement_notes"]}',
+		])
+		np.savetxt(fname, data, delimiter="\t", header=header)
+
 
 	@QThread.threaded_d
 	def run_measurement(self, values):
