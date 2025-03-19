@@ -845,8 +845,9 @@ def fit_lineshape(xs, ys, peakdirection, fit_xs, profilename, derivative, offset
 	filename = llwpfile(".fit")
 	datetime = time.strftime("%d.%m.%Y %H:%M:%S", time.localtime())
 	
+	notes = config['measurement_notes']
 	spacer = '#' * 46
-	header = f'Fit from {datetime}\nProfile: {profilename} {derivative}-Derivative\n\n'
+	header = f'Fit from {datetime}\nProfile: {profilename} {derivative}-Derivative\nNotes: {notes}\n\n'
 	labels = ('Center', 'Amplitude', 'FWHM') if profilename != 'Voigt' else ('Center', 'Amplitude', 'FWHM Gauss', 'FWHM Lorentz')
 	
 	message = f'{spacer}\n{header}'
