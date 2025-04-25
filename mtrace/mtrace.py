@@ -37,7 +37,7 @@ import re
 import time
 import pickle
 import pyvisa
-import pyserial
+import serial
 import json
 import threading
 import configparser
@@ -212,6 +212,7 @@ class MainWindow(QMainWindow):
 
 		ConfigWindow()
 		LogWindow()
+		PressureWindow()
 		
 		self.mainwidget = MainWidget()
 		self.setCentralWidget(self.mainwidget)
@@ -334,7 +335,7 @@ class MainWidget(QGroupBox):
 		tmp_layout.addWidget(self.continue_button, i_row, 6)
 
 		i_row += 1
-		self.save_button = QQ(QPushButton, text='Save', change=self.save_measurement)
+		self.save_button = QQ(QPushButton, text='Save', change=lambda x: self.save_measurement())
 		tmp_layout.addWidget(self.save_button, i_row, 6)
 
 		tmp_layout.setColumnMinimumWidth(1, 150)
@@ -419,25 +420,11 @@ class MainWidget(QGroupBox):
 
 		# Save file into MTRACE folder
 		homefolder = llwpfile()
-		directory = os.path.join(homefolder, "data", time.strftime("%Y%m%d", time.localtime())
-)
+		directory = os.path.join(homefolder, "data", time.strftime("%Y%m%d", time.localtime()))
 		if not os.path.exists(directory):
 			os.makedirs(directory, exist_ok=True)
-		
 		fname = os.path.join(directory, time.strftime("%H-%M-%S", time.localtime()))
-		fs, xs, ys = self.freqs.copy(), self.xs.copy(), self.ys.copy()
-		df = pd.DataFrame({'Frequency': fs, 'X': xs, 'Y': ys})
-		data = df.groupby('Frequency').mean().reset_index().values
-
-		header = '\n'.join([
-			f'FM/AM Mode: {self.values["measurement_modulationtype"]}',
-			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
-			f'FM/AM Amplitude: {self.values["measurement_modulationamplitude"]}',
-			f'Timeconstant: {self.values["measurement_modulationamplitude"]}',
-			f'Notes: {self.values["measurement_notes"]}',
-		])
-		np.savetxt(fname, data, delimiter="\t", header=header)
-
+		self.save_measurement(fname)
 
 	@QThread.threaded_d
 	def run_measurement(self, values):
@@ -524,7 +511,7 @@ class MainWidget(QGroupBox):
 			synthesizer.write('R1') # RF on
 
 			time.sleep(0.5)
-			self.pressure_before = self.measure_pressure(values)
+			self.pressure_before = measure_pressure(values['address_pressuregauge'], values['measurement_skippressure'])
 
 			self.xs = np.full_like(self.freqs, np.nan)
 			self.ys = self.xs.copy()
@@ -555,7 +542,7 @@ class MainWidget(QGroupBox):
 			synthesizer.write(f'FR{freq*1E6}HZ') # Set frequency to center frequency
 			synthesizer.write('R0') # RF off
 
-			self.pressure_after = self.measure_pressure(values)
+			self.pressure_after = measure_pressure(values['address_pressuregauge'], values['measurement_skippressure'])
 
 		except Exception as E:
 			raise E
@@ -570,10 +557,11 @@ class MainWidget(QGroupBox):
 				self.synthesizer.close()
 				self.synthesizer = None
 
-	def save_measurement(self):
-		fname = QFileDialog.getSaveFileName(None, 'Choose file to save measurement to',"","CSV Files (*.csv);;All Files (*)")[0]
-		if not fname or self.values is None:
-			return
+	def save_measurement(self, fname=None):
+		if fname is None:
+			fname = QFileDialog.getSaveFileName(None, 'Choose file to save measurement to',"","CSV Files (*.csv);;All Files (*)")[0]
+			if not fname or self.values is None:
+				return
 		
 		fs, xs, ys = self.freqs.copy(), self.xs.copy(), self.ys.copy()
 		df = pd.DataFrame({'Frequency': fs, 'X': xs, 'Y': ys})
@@ -589,33 +577,6 @@ class MainWidget(QGroupBox):
 			f'Notes: {self.values["measurement_notes"]}',
 		])
 		np.savetxt(fname, data, delimiter="\t", header=header)
-
-	def measure_pressure(self, values):
-		pressure_gauge_address = values['address_pressuregauge'].strip()
-		skip_reading = values['measurement_skippressure']
-
-		if not pressure_gauge_address or skip_reading:
-			return(None)
-
-		try:
-			device = serial.Serial(address, **PRESSURE_GAUGE_KWARGS)
-			command = 'PRS?\r\n'
-			command = command.encode('utf-8')
-			device.write(command)
-
-			time.sleep(0.05)
-
-			response = device.readline()
-			response = response.decode('utf-8').strip()
-			
-			if not response:
-				return(None)
-			return(response)
-			
-		except Exception as E:
-			notify_warning.emit(f'Could not read the pressure. Error reads:\n{E}')
-			return(None)
-
 
 	def autophase_lockin(self):
 		if self.lockin:
@@ -945,6 +906,9 @@ class Menu():
 		toggleaction_log = LogWindow.instance.toggleViewAction()
 		toggleaction_log.setShortcut('Shift+1')
 
+		toggleaction_pressure = PressureWindow.instance.toggleViewAction()
+		toggleaction_pressure.setShortcut('Shift+2')
+
 		plot_component_menu = QMenu('Plot y-data', parent=parent)
 		current_component = config['plot_ycomponent']
 		self.component_actions = {}
@@ -982,6 +946,7 @@ class Menu():
 			'View': (
 				toggleaction_config,
 				toggleaction_log,
+				toggleaction_pressure,
 				QQ(QAction, 'flag_matplotlibtoolbar', checkable=True, text='MPL Toolbar'),
 				None,
 				plot_component_menu,
@@ -1254,6 +1219,7 @@ class Config(dict):
 		'flag_logmaxrows': (1000, int),
 		'flag_statusbarmaxcharacters': (100, int),
 		'flag_notificationtime': (2000, int),
+		'flag_pressurefontsize': (20, float),
 
 		'fit_xpoints': (1000, int),
 		'fit_fitmethod': ('Voigt 2nd Derivative', str),
@@ -1785,6 +1751,72 @@ class LogWindow(EQDockWidget):
 		sb = self.log_area.verticalScrollBar()
 		sb.setValue(sb.maximum())
 
+
+pressure_gauge_lock = threading.Lock()
+def measure_pressure(address, skip_reading=False):
+	if not address or skip_reading:
+		return(None)
+
+	try:
+		command = 'PRI?\r\n'
+		command = command.encode('utf-8')
+		
+		with pressure_gauge_lock:
+			device = serial.Serial(address, **PRESSURE_GAUGE_KWARGS)
+			device.write(command)
+			time.sleep(0.05)
+			response = device.readline()
+			response = response.decode('utf-8').strip()	
+			device.close()
+		
+		if not response:
+			return(None)
+		return(response.replace('PRI=', ''))
+		
+	except Exception as E:
+		notify_warning.emit(f'Could not read the pressure. Error reads:\n{E}')
+		return(None)
+
+class PressureWindow(EQDockWidget):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.setWindowTitle("Pressure")
+
+		self.label = QQ(QTextEdit)
+		self.label.setFontPointSize(config['flag_pressurefontsize'])
+		self.setWidget(self.label)
+		self.visibilityChanged.connect(self.on_visibility_change)
+
+		config.register('flag_pressurefontsize', lambda: self.label.setFontPointSize(config['flag_pressurefontsize']))
+
+	def on_visibility_change(self, is_visible):
+		if is_visible:
+			self.timer = QTimer(self)
+			self.timer.timeout.connect(self.update_pressure)
+			self.timer.start(200)
+		else:
+			self.timer.stop()
+
+	def update_pressure(self):
+		voltage = measure_pressure(config['address_pressuregauge'], config['measurement_skippressure'])
+		if voltage is None:
+			self.label.setText(f'No Pressure')
+		else:
+			voltage = voltage.split('=')[1].replace('mV', '')
+			voltage = float(voltage)/1000
+			pressure = 10 ** (voltage - 5.5)
+
+			power_of_ten = np.log10(pressure)
+			if power_of_ten <= -3:
+				pressure *= 1000
+				unit = 'ubar'
+			elif power_of_ten >= 3:
+				pressure /= 1000
+				unit = 'bar'
+			else:
+				unit = 'mbar'
+
+			self.label.setText(f'{pressure} {unit}')
 
 
 def start():
