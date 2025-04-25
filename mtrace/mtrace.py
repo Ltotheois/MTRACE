@@ -37,6 +37,7 @@ import re
 import time
 import pickle
 import pyvisa
+import pyserial
 import json
 import threading
 import configparser
@@ -68,6 +69,8 @@ SEN_OPTIONS = {
 	18: '1mV', 19: '2mV', 20: '5mV', 21: '10mV', 22: '20mV', 23: '50mV', 24: '100mV', 25: '200mV', 26: '500mV', 27: '1V'
 }
 SEN_OPTIONS_INV = {value: key for key, value in SEN_OPTIONS.items()}
+
+PRESSURE_GAUGE_KWARGS = {'baudrate': 9600, 'bytesize': 8, 'stopbits': 1, 'parity': serial.PARITY_NONE, 'timeout': 0.5}
 
 ##
 ## Global Decorators
@@ -246,6 +249,8 @@ class MainWidget(QGroupBox):
 		self.freqs = np.zeros((0,))
 		self.xs = np.zeros((0,))
 		self.ys = np.zeros((0,))
+		self.pressure_before = None
+		self.pressure_after = None
 		self.values = None
 		self.nextfrequency_counter = AtomicCounter()
 		self.state = 'waiting'
@@ -438,6 +443,8 @@ class MainWidget(QGroupBox):
 	def run_measurement(self, values):
 		try:		
 			self.values = values
+			self.pressure_after = None
+			self.pressure_before = None
 
 			# Connect devices
 			rm = pyvisa.ResourceManager()
@@ -517,6 +524,7 @@ class MainWidget(QGroupBox):
 			synthesizer.write('R1') # RF on
 
 			time.sleep(0.5)
+			self.pressure_before = self.measure_pressure(values)
 
 			self.xs = np.full_like(self.freqs, np.nan)
 			self.ys = self.xs.copy()
@@ -547,6 +555,8 @@ class MainWidget(QGroupBox):
 			synthesizer.write(f'FR{freq*1E6}HZ') # Set frequency to center frequency
 			synthesizer.write('R0') # RF off
 
+			self.pressure_after = self.measure_pressure(values)
+
 		except Exception as E:
 			raise E
 		finally:
@@ -574,9 +584,38 @@ class MainWidget(QGroupBox):
 			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
 			f'FM/AM Amplitude: {self.values["measurement_modulationamplitude"]}',
 			f'Timeconstant: {self.values["measurement_modulationamplitude"]}',
+			f'Pressure before: {self.pressure_before}',
+			f'Pressure after: {self.pressure_after}',
 			f'Notes: {self.values["measurement_notes"]}',
 		])
 		np.savetxt(fname, data, delimiter="\t", header=header)
+
+	def measure_pressure(self, values):
+		pressure_gauge_address = values['address_pressuregauge'].strip()
+		skip_reading = values['measurement_skippressure']
+
+		if not pressure_gauge_address or skip_reading:
+			return(None)
+
+		try:
+			device = serial.Serial(address, **PRESSURE_GAUGE_KWARGS)
+			command = 'PRS?\r\n'
+			command = command.encode('utf-8')
+			device.write(command)
+
+			time.sleep(0.05)
+
+			response = device.readline()
+			response = response.decode('utf-8').strip()
+			
+			if not response:
+				return(None)
+			return(response)
+			
+		except Exception as E:
+			notify_warning.emit(f'Could not read the pressure. Error reads:\n{E}')
+			return(None)
+
 
 	def autophase_lockin(self):
 		if self.lockin:
@@ -845,9 +884,12 @@ def fit_lineshape(xs, ys, peakdirection, fit_xs, profilename, derivative, offset
 	filename = llwpfile(".fit")
 	datetime = time.strftime("%d.%m.%Y %H:%M:%S", time.localtime())
 	
+	pressure_before = mainwindow.mainwidget.pressure_before
+	pressure_after = mainwindow.mainwidget.pressure_after
+
 	notes = config['measurement_notes']
 	spacer = '#' * 46
-	header = f'Fit from {datetime}\nProfile: {profilename} {derivative}-Derivative\nNotes: {notes}\n\n'
+	header = f'Fit from {datetime}\nProfile: {profilename} {derivative}-Derivative\nPressure before: {pressure_before}\nPressure after: {pressure_after}\nNotes: {notes}\n\n'
 	labels = ('Center', 'Amplitude', 'FWHM') if profilename != 'Voigt' else ('Center', 'Amplitude', 'FWHM Gauss', 'FWHM Lorentz')
 	
 	message = f'{spacer}\n{header}'
@@ -1183,6 +1225,7 @@ class Config(dict):
 	initial_values = {
 		'address_synthesizer': ('GPIB::19', str),
 		'address_lockin': ('GPIB::12', str),
+		'address_pressuregauge': ('COM1', str),
 
 		'measurement_center': (23870.1296, float),
 		'measurement_span': (10, float),
@@ -1197,6 +1240,7 @@ class Config(dict):
 		'measurement_acgain': (4, float),
 		'measurement_notes': ('', str),
 		'measurement_skipinitialization': (False, bool),
+		'measurement_skippressure': (False, bool),
 
 		'plot_dpi': (100, int),
 		'plot_ymargin': (0.1, float),

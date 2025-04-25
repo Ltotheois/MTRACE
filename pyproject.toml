@@ -11,7 +11,7 @@ authors = [
 description = "MTRACE (Mini Tool for Remotely Accessing and Controlling Experiments) allows to control simple absorption experiments"
 readme = "README.md"
 requires-python = ">=3.7"
-dependencies = ['numpy', 'pandas', 'matplotlib', 'scipy', 'PyQt6', 'pyvisa']
+dependencies = ['numpy', 'pandas', 'matplotlib', 'scipy', 'PyQt6', 'pyvisa', 'pyserial']
 classifiers = [
 	"Programming Language :: Python :: 3",
 	"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
