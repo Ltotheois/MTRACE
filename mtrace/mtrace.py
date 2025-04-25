@@ -1219,7 +1219,7 @@ class Config(dict):
 		'flag_logmaxrows': (1000, int),
 		'flag_statusbarmaxcharacters': (100, int),
 		'flag_notificationtime': (2000, int),
-		'flag_pressurefontsize': (20, float),
+		'flag_pressurefontsize': (40, float),
 
 		'fit_xpoints': (1000, int),
 		'fit_fitmethod': ('Voigt 2nd Derivative', str),
@@ -1753,7 +1753,7 @@ class LogWindow(EQDockWidget):
 
 
 pressure_gauge_lock = threading.Lock()
-def measure_pressure(address, skip_reading=False):
+def measure_pressure(address, skip_reading=False, suppress_warning=False):
 	if not address or skip_reading:
 		return(None)
 
@@ -1774,7 +1774,8 @@ def measure_pressure(address, skip_reading=False):
 		return(response.replace('PRI=', ''))
 		
 	except Exception as E:
-		notify_warning.emit(f'Could not read the pressure. Error reads:\n{E}')
+		if not suppress_warning:
+			notify_warning.emit(f'Could not read the pressure. Error reads:\n{E}')
 		return(None)
 
 class PressureWindow(EQDockWidget):
@@ -1784,6 +1785,7 @@ class PressureWindow(EQDockWidget):
 
 		self.label = QQ(QTextEdit)
 		self.label.setFontPointSize(config['flag_pressurefontsize'])
+		self.label.setFontFamily("Courier")
 		self.setWidget(self.label)
 		self.visibilityChanged.connect(self.on_visibility_change)
 
@@ -1798,16 +1800,16 @@ class PressureWindow(EQDockWidget):
 			self.timer.stop()
 
 	def update_pressure(self):
-		voltage = measure_pressure(config['address_pressuregauge'], config['measurement_skippressure'])
+		voltage = measure_pressure(config['address_pressuregauge'], config['measurement_skippressure'], True)
 		if voltage is None:
 			self.label.setText(f'No Pressure')
 		else:
-			voltage = voltage.split('=')[1].replace('mV', '')
+			voltage = voltage.replace('mV', '')
 			voltage = float(voltage)/1000
 			pressure = 10 ** (voltage - 5.5)
 
 			power_of_ten = np.log10(pressure)
-			if power_of_ten <= -3:
+			if power_of_ten < 0:
 				pressure *= 1000
 				unit = 'ubar'
 			elif power_of_ten >= 3:
@@ -1816,7 +1818,7 @@ class PressureWindow(EQDockWidget):
 			else:
 				unit = 'mbar'
 
-			self.label.setText(f'{pressure} {unit}')
+			self.label.setText(f'{pressure:6.2f} {unit}')
 
 
 def start():
