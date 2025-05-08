@@ -45,6 +45,7 @@ import traceback as tb
 import numpy as np
 import pandas as pd
 import webbrowser
+import retrophase
 
 from scipy import optimize, special
 
@@ -538,9 +539,29 @@ class MainWidget(QGroupBox):
 				self.xs[i], self.ys[i] = x*1e6, y*1e6
 				self.newdata_available.emit()
 
-			freq = center/2
-			synthesizer.write(f'FR{freq*1E6}HZ') # Set frequency to center frequency
+			freq = center
+			synthesizer.write(f'FR{freq/2*1E6}HZ') # Set frequency to center frequency
 			synthesizer.write('R0') # RF off
+			
+			if values['flag_autophase']:
+				fs, xs, ys = self.freqs, self.xs, self.ys
+				rabss = np.sqrt(xs**2 + ys**2)
+				std = np.std(rabss)
+				xmax = np.max(rabss)
+			
+				if std / xmax > 0.1:
+					notify_warning.emit('Found no strong signal in the measurement, therefore the phase was not automatically adjusted.')
+				
+				else:
+					best_phase = retrophase.autophase(fs, xs, ys)
+					new_xs, new_ys = retrophase.change_phase(fs, xs, ys, best_phase)
+					
+					if best_phase < 0:
+						best_phase += 360
+					notify_info.emit(f'Optimized the phase by a shift of {best_phase:-6.2f}°.')
+					
+					self.xs, self.ys = new_xs, new_ys
+					self.newdata_available.emit()
 
 			self.pressure_after = measure_pressure(values['address_pressuregauge'], values['measurement_skippressure'])
 
@@ -571,7 +592,7 @@ class MainWidget(QGroupBox):
 			f'FM/AM Mode: {self.values["measurement_modulationtype"]}',
 			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
 			f'FM/AM Amplitude: {self.values["measurement_modulationamplitude"]}',
-			f'Timeconstant: {self.values["measurement_modulationamplitude"]}',
+			f'Timeconstant: {self.values["measurement_timeconstant"]}',
 			f'Pressure before: {self.pressure_before}',
 			f'Pressure after: {self.pressure_after}',
 			f'Notes: {self.values["measurement_notes"]}',
@@ -610,6 +631,7 @@ class MainWidget(QGroupBox):
 		if xmax == xmin:
 			return
 			
+		self.remove_fitline()
 		tmp_xs = self.freqs
 		
 		component = config['plot_ycomponent']
@@ -636,8 +658,6 @@ class MainWidget(QGroupBox):
 			fit_function = get_fitfunction(fitmethod, config['fit_offset'])
 			xmiddle, xuncert, fit_xs, fit_ys = fit_function(tmp_xs, tmp_ys, peakdirection, fit_xs)
 		except Exception as E:
-			self.fitcurve = None
-			self.fitline = None
 			notify_error.emit(f"The fitting failed with the following error message : {str(E)}")
 			raise
 		
@@ -1220,6 +1240,7 @@ class Config(dict):
 		'flag_statusbarmaxcharacters': (100, int),
 		'flag_notificationtime': (2000, int),
 		'flag_pressurefontsize': (40, float),
+		'flag_autophase': (True, float),
 
 		'fit_xpoints': (1000, int),
 		'fit_fitmethod': ('Voigt 2nd Derivative', str),
