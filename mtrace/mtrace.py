@@ -429,7 +429,7 @@ class MainWidget(QGroupBox):
 
 	@QThread.threaded_d
 	def run_measurement(self, values):
-		try:		
+		try:
 			self.values = values
 			self.pressure_after = None
 			self.pressure_before = None
@@ -438,14 +438,15 @@ class MainWidget(QGroupBox):
 			rm = pyvisa.ResourceManager()
 			self.synthesizer = synthesizer = rm.open_resource(values['address_synthesizer'])
 			self.lockin = lockin = rm.open_resource(values['address_lockin'])
+			freq_mult = values['measurement_frequencymultiplication']
 			
 			# Calculate frequency positions
 			center, span = values['measurement_center'], values['measurement_span']
 			stepsize = values['measurement_stepsize'] / 1000
-			self.ax.set_xlim(center - span/2, center + span/2)
+			self.ax.set_xlim(center - span/freq_mult, center + span/freq_mult)
 			self.remove_fitline()
 			self.drawplot.emit()
-			N = span/2 // stepsize + 1
+			N = span/freq_mult // stepsize + 1
 			self.freqs = np.arange(-N, N+1) * stepsize + center
 
 			# Repetitions
@@ -459,7 +460,7 @@ class MainWidget(QGroupBox):
 				self.freqs = np.concatenate(tmp)
 			
 			# Divide by two to take into account the doubler
-			fm_amplitude = values['measurement_modulationamplitude'] / 2
+			fm_amplitude = values['measurement_modulationamplitude'] / freq_mult
 
 			# Determin OSC Amplitude
 			if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
@@ -507,7 +508,7 @@ class MainWidget(QGroupBox):
 					synthesizer.write('A2') # 30% AM
 
 			freq = self.freqs[0]
-			synthesizer.write(f'FR{freq/2*1E6}HZ')
+			synthesizer.write(f'FR{freq/freq_mult*1E6}HZ')
 			synthesizer.write('RA13DB') # Set to full power
 			synthesizer.write('R1') # RF on
 
@@ -528,7 +529,7 @@ class MainWidget(QGroupBox):
 					
 					time.sleep(0.1)
 				
-				synthesizer.write(f'FR{freq/2*1E6}HZ')
+				synthesizer.write(f'FR{freq/freq_mult*1E6}HZ')
 			
 				counterstart = time.perf_counter()
 				while time.perf_counter() - counterstart < delay_time:
@@ -540,7 +541,7 @@ class MainWidget(QGroupBox):
 				self.newdata_available.emit()
 
 			freq = center
-			synthesizer.write(f'FR{freq/2*1E6}HZ') # Set frequency to center frequency
+			synthesizer.write(f'FR{freq/freq_mult*1E6}HZ') # Set frequency to center frequency
 			synthesizer.write('R0') # RF off
 			
 			if values['flag_autophase']:
@@ -1226,6 +1227,7 @@ class Config(dict):
 		'measurement_notes': ('', str),
 		'measurement_skipinitialization': (False, bool),
 		'measurement_skippressure': (False, bool),
+		'measurement_frequencymultiplication': (2, int),
 
 		'plot_dpi': (100, int),
 		'plot_ymargin': (0.1, float),
