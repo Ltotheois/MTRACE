@@ -311,8 +311,8 @@ class MainWidget(QGroupBox):
 		tmp_layout.addWidget(QQ(QDoubleSpinBox, 'measurement_modulationfrequency', range=(0, np.inf)), i_row, 4)
 
 		i_row += 1
-		tmp_layout.addWidget(QQ(QLabel, text='FM Amplitude [kHz]: '), i_row, 3)
-		tmp_layout.addWidget(QQ(QDoubleSpinBox, 'measurement_modulationamplitude', range=(0, np.inf)), i_row, 4)
+		tmp_layout.addWidget(QQ(QLabel, text='FM Deviation [kHz]: '), i_row, 3)
+		tmp_layout.addWidget(QQ(QDoubleSpinBox, 'measurement_modulationdeviation', range=(0, np.inf)), i_row, 4)
 
 		i_row += 1
 		tmp_layout.addWidget(QQ(QLabel, text='Integration Time: '), i_row, 3)
@@ -460,7 +460,7 @@ class MainWidget(QGroupBox):
 				self.freqs = np.concatenate(tmp)
 			
 			# Divide by two to take into account the doubler
-			fm_amplitude = values['measurement_modulationamplitude'] / freq_mult
+			fm_amplitude = values['measurement_modulationdeviation'] / freq_mult
 
 			# Determin OSC Amplitude
 			if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
@@ -532,6 +532,8 @@ class MainWidget(QGroupBox):
 				synthesizer.write(f'FR{freq/freq_mult*1E6}HZ')
 			
 				counterstart = time.perf_counter()
+				# Sleep to not hog the CPU
+				time.sleep(delay_time)
 				while time.perf_counter() - counterstart < delay_time:
 					continue
 
@@ -592,7 +594,7 @@ class MainWidget(QGroupBox):
 		header = '\n'.join([
 			f'FM/AM Mode: {self.values["measurement_modulationtype"]}',
 			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
-			f'FM/AM Amplitude: {self.values["measurement_modulationamplitude"]}',
+			f'FM/AM Amplitude: {self.values["measurement_modulationdeviation"]}',
 			f'Timeconstant: {self.values["measurement_timeconstant"]}',
 			f'Pressure before: {self.pressure_before}',
 			f'Pressure after: {self.pressure_after}',
@@ -1220,7 +1222,7 @@ class Config(dict):
 		'measurement_timeconstant': ('20ms', str),
 		'measurement_modulationtype': ('2f-FM', str),
 		'measurement_modulationfrequency': (10, float),
-		'measurement_modulationamplitude': (600, float),
+		'measurement_modulationdeviation': (600, float),
 		'measurement_lockinsensitivity': ('20µV', str),
 		'measurement_additionaldelaytime': (5e-3, float),
 		'measurement_acgain': (4, float),
