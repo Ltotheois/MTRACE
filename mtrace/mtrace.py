@@ -460,15 +460,15 @@ class MainWidget(QGroupBox):
 				self.freqs = np.concatenate(tmp)
 			
 			# Divide by two to take into account the doubler
-			fm_amplitude = values['measurement_modulationdeviation'] / freq_mult
+			fm_deviation = values['measurement_modulationdeviation'] / freq_mult
 
 			# Determin OSC Amplitude
 			if values['measurement_modulationtype'] in ('1f-FM', '2f-FM'):
 				fm_factors = {7: 10000, 6: 3000, 5: 1000, 4: 300, 3: 100, 2: 30}
-				tmp = {key: value for key, value in fm_factors.items() if value >= fm_amplitude}
+				tmp = {key: value for key, value in fm_factors.items() if value >= fm_deviation}
 				fm_factor_key = min(tmp, key=tmp.get)
 				fm_factor = fm_factors[fm_factor_key]		
-				osc_amp = fm_amplitude / fm_factor
+				osc_amp = fm_deviation / fm_factor
 			else:
 				osc_amp = 0.5
 
@@ -594,8 +594,10 @@ class MainWidget(QGroupBox):
 		header = '\n'.join([
 			f'FM/AM Mode: {self.values["measurement_modulationtype"]}',
 			f'FM/AM Frequency: {self.values["measurement_modulationfrequency"]}',
-			f'FM/AM Amplitude: {self.values["measurement_modulationdeviation"]}',
+			f'FM/AM Deviation: {self.values["measurement_modulationdeviation"]}',
 			f'Timeconstant: {self.values["measurement_timeconstant"]}',
+			f'Repetitions: {self.values["measurement_repetitions"]}',
+			f'Lock-In Sensitiviy: {self.values["measurement_lockinsensitivity"]}',
 			f'Pressure before: {self.pressure_before}',
 			f'Pressure after: {self.pressure_after}',
 			f'Notes: {self.values["measurement_notes"]}',
