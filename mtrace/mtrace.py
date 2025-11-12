@@ -512,7 +512,7 @@ class MainWidget(QGroupBox):
 			synthesizer.write('RA13DB') # Set to full power
 			synthesizer.write('R1') # RF on
 
-			time.sleep(0.5)
+			time.sleep(2)
 			self.pressure_before = measure_pressure(values['address_pressuregauge'], values['measurement_skippressure'])
 
 			self.xs = np.full_like(self.freqs, np.nan)
@@ -520,6 +520,7 @@ class MainWidget(QGroupBox):
 			for i, freq in enumerate(self.freqs):
 				while self.state != 'running':
 					if self.state == 'aborting':
+						synthesizer.write('R0') # RF off
 						return
 					
 					tmp = self.nextfrequency_counter.get_value()
@@ -1246,7 +1247,7 @@ class Config(dict):
 		'flag_statusbarmaxcharacters': (100, int),
 		'flag_notificationtime': (2000, int),
 		'flag_pressurefontsize': (40, float),
-		'flag_autophase': (True, float),
+		'flag_autophase': (True, bool),
 
 		'fit_xpoints': (1000, int),
 		'fit_fitmethod': ('Voigt 2nd Derivative', str),
