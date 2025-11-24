@@ -512,7 +512,7 @@ class MainWidget(QGroupBox):
 			synthesizer.write('RA13DB') # Set to full power
 			synthesizer.write('R1') # RF on
 
-			time.sleep(2)
+			time.sleep(values['measurement_settlingtime'])
 			self.pressure_before = measure_pressure(values['address_pressuregauge'], values['measurement_skippressure'])
 
 			self.xs = np.full_like(self.freqs, np.nan)
@@ -1233,6 +1233,7 @@ class Config(dict):
 		'measurement_skipinitialization': (False, bool),
 		'measurement_skippressure': (False, bool),
 		'measurement_frequencymultiplication': (2, int),
+		'measurement_settlingtime': (4, float),
 
 		'plot_dpi': (100, int),
 		'plot_ymargin': (0.1, float),
